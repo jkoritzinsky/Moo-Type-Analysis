@@ -1079,6 +1079,8 @@ abstract class ExpNode extends ASTnode {
      * Default version for nodes with no names
      */
     public void nameAnalysis(SymTable symTab) { }
+
+    public abstract Type typeCheck();
 }
 
 class IntLitNode extends ExpNode {
@@ -1090,6 +1092,10 @@ class IntLitNode extends ExpNode {
 
     public void unparse(PrintWriter p, int indent) {
         p.print(myIntVal);
+    }
+
+    public Type typeCheck() {
+        return new IntType();
     }
 
     private int myLineNum;
@@ -1108,6 +1114,10 @@ class StringLitNode extends ExpNode {
         p.print(myStrVal);
     }
 
+    public Type typeCheck() {
+        return new StringType();
+    }
+
     private int myLineNum;
     private int myCharNum;
     private String myStrVal;
@@ -1123,6 +1133,10 @@ class TrueNode extends ExpNode {
         p.print("true");
     }
 
+    public Type typeCheck() {
+        return new BoolType();
+    }
+
     private int myLineNum;
     private int myCharNum;
 }
@@ -1135,6 +1149,10 @@ class FalseNode extends ExpNode {
 
     public void unparse(PrintWriter p, int indent) {
         p.print("false");
+    }
+
+    public Type typeCheck() {
+        return new BoolType();
     }
 
     private int myLineNum;
@@ -1196,6 +1214,10 @@ class IdNode extends ExpNode {
         } else {
             link(sym);
         }
+    }
+
+    public Type typeCheck() {
+        return mySym.getType();
     }
     
     public void unparse(PrintWriter p, int indent) {
@@ -1335,6 +1357,10 @@ class DotAccessExpNode extends ExpNode {
             }
         }
     }    
+
+    public Type typeCheck() {
+        return mySym.getType();
+    }
     
     public void unparse(PrintWriter p, int indent) {
         myLoc.unparse(p, 0);
@@ -1373,6 +1399,11 @@ class AssignNode extends ExpNode {
         if (indent != -1)  p.print(")");
     }
 
+    public Type typeCheck() {
+        // TODO: Implement checks.
+        return myLhs.typeCheck();
+    }
+
     // 2 kids
     private ExpNode myLhs;
     private ExpNode myExp;
@@ -1407,6 +1438,16 @@ class CallExpNode extends ExpNode {
             myExpList.unparse(p, 0);
         }
         p.print(")");
+    }
+
+    public Type typeCheck() {
+        if(!(myId.sym() instanceof FnSym)) {
+            //TODO: Print Error
+            return new ErrorType();
+        }
+        FnSym sym = (FnSym) myId.sym();
+        //TODO: Type-check parameters
+        return sym.getReturnType();
     }
 
     // 2 kids
@@ -1452,6 +1493,112 @@ abstract class BinaryExpNode extends ExpNode {
     protected ExpNode myExp2;
 }
 
+abstract class ArithmeticBinaryExpNode extends BinaryExpNode {
+    public ArithmeticBinaryExpNode(ExpNode exp1, ExpNode exp2) {
+        super(exp1, exp2);
+    }
+
+    public Type typeCheck() {
+        Type exp1Type = myExp1.typeCheck();
+        Type exp2Type = myExp2.typeCheck();
+        if (exp1Type.isErrorType() || exp2Type.isErrorType()) {
+            return new ErrorType();
+        }
+        if (!exp1Type.isIntType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+        if(!exp2Type.isIntType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+        return new IntType();
+    }
+}
+
+abstract class BooleanBinaryExpNode extends BinaryExpNode {
+    public BooleanBinaryExpNode(ExpNode exp1, ExpNode exp2) {
+        super(exp1, exp2);
+    }
+
+    public Type typeCheck() {
+        Type exp1Type = myExp1.typeCheck();
+        Type exp2Type = myExp2.typeCheck();
+        if (exp1Type.isErrorType() || exp2Type.isErrorType()) {
+            return new ErrorType();
+        }
+        if (!exp1Type.isBoolType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+        if(!exp2Type.isBoolType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+        return new BoolType();
+    }
+}
+
+abstract class ComparisonBinaryExpNode extends BinaryExpNode {
+    public ComparisonBinaryExpNode(ExpNode exp1, ExpNode exp2) {
+        super(exp1, exp2);
+    }
+
+    public Type typeCheck() {
+        Type exp1Type = myExp1.typeCheck();
+        Type exp2Type = myExp2.typeCheck();
+        if (exp1Type.isErrorType() || exp2Type.isErrorType()) {
+            return new ErrorType();
+        }
+        if (!exp1Type.isIntType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+        if(!exp2Type.isIntType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+        return new BoolType();
+    }
+}
+
+abstract class EqualityComparisonExpNode extends BinaryExpNode {
+    public EqualityComparisonExpNode(ExpNode exp1, ExpNode exp2) {
+        super(exp1, exp2);
+    }
+
+    public Type typeCheck() {
+        Type exp1Type = myExp1.typeCheck();
+        Type exp2Type = myExp2.typeCheck();
+        if (exp1Type.isErrorType() || exp2Type.isErrorType()) {
+            return new ErrorType();
+        }
+
+        if(!exp1Type.equals(exp2Type)) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+
+        if(exp1Type.isFnType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+
+        if(exp1Type.isVoidType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+
+        if(exp1Type.isStructDefType()) {
+            //TODO: Print error
+            return new ErrorType();
+        }
+
+
+        return new BoolType();
+    }
+}
+
 // **********************************************************************
 // Subclasses of UnaryExpNode
 // **********************************************************************
@@ -1466,6 +1613,19 @@ class UnaryMinusNode extends UnaryExpNode {
         myExp.unparse(p, 0);
         p.print(")");
     }
+
+    public Type typeCheck() {
+        Type expType = myExp.typeCheck();
+        if(expType.isErrorType()) {
+            return new ErrorType();
+        }
+        if(expType.isIntType()) {
+            return new IntType();
+        }
+
+        //TODO: Print error
+        return new ErrorType();
+    }
 }
 
 class NotNode extends UnaryExpNode {
@@ -1478,13 +1638,26 @@ class NotNode extends UnaryExpNode {
         myExp.unparse(p, 0);
         p.print(")");
     }
+
+    public Type typeCheck() {
+        Type expType = myExp.typeCheck();
+        if(expType.isErrorType()) {
+            return new ErrorType();
+        }
+        if(expType.isBoolType()) {
+            return new BoolType();
+        }
+
+        //TODO: Print error
+        return new ErrorType();
+    }
 }
 
 // **********************************************************************
 // Subclasses of BinaryExpNode
 // **********************************************************************
 
-class PlusNode extends BinaryExpNode {
+class PlusNode extends ArithmeticBinaryExpNode {
     public PlusNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1498,7 +1671,7 @@ class PlusNode extends BinaryExpNode {
     }
 }
 
-class MinusNode extends BinaryExpNode {
+class MinusNode extends ArithmeticBinaryExpNode {
     public MinusNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1512,7 +1685,7 @@ class MinusNode extends BinaryExpNode {
     }
 }
 
-class TimesNode extends BinaryExpNode {
+class TimesNode extends ArithmeticBinaryExpNode {
     public TimesNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1526,7 +1699,7 @@ class TimesNode extends BinaryExpNode {
     }
 }
 
-class DivideNode extends BinaryExpNode {
+class DivideNode extends ArithmeticBinaryExpNode {
     public DivideNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1540,7 +1713,7 @@ class DivideNode extends BinaryExpNode {
     }
 }
 
-class AndNode extends BinaryExpNode {
+class AndNode extends BooleanBinaryExpNode {
     public AndNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1554,7 +1727,7 @@ class AndNode extends BinaryExpNode {
     }
 }
 
-class OrNode extends BinaryExpNode {
+class OrNode extends BooleanBinaryExpNode {
     public OrNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1568,7 +1741,7 @@ class OrNode extends BinaryExpNode {
     }
 }
 
-class EqualsNode extends BinaryExpNode {
+class EqualsNode extends EqualityComparisonExpNode {
     public EqualsNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1582,7 +1755,7 @@ class EqualsNode extends BinaryExpNode {
     }
 }
 
-class NotEqualsNode extends BinaryExpNode {
+class NotEqualsNode extends EqualityComparisonExpNode {
     public NotEqualsNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1596,7 +1769,7 @@ class NotEqualsNode extends BinaryExpNode {
     }
 }
 
-class LessNode extends BinaryExpNode {
+class LessNode extends ComparisonBinaryExpNode {
     public LessNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1610,7 +1783,7 @@ class LessNode extends BinaryExpNode {
     }
 }
 
-class GreaterNode extends BinaryExpNode {
+class GreaterNode extends ComparisonBinaryExpNode {
     public GreaterNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1624,7 +1797,7 @@ class GreaterNode extends BinaryExpNode {
     }
 }
 
-class LessEqNode extends BinaryExpNode {
+class LessEqNode extends ComparisonBinaryExpNode {
     public LessEqNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
@@ -1638,7 +1811,7 @@ class LessEqNode extends BinaryExpNode {
     }
 }
 
-class GreaterEqNode extends BinaryExpNode {
+class GreaterEqNode extends ComparisonBinaryExpNode {
     public GreaterEqNode(ExpNode exp1, ExpNode exp2) {
         super(exp1, exp2);
     }
