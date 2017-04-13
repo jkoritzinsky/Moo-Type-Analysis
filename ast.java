@@ -136,7 +136,7 @@ class ProgramNode extends ASTnode {
     }
     
     public void typeCheck(){
-    	// TODO: You'll have to change this
+    	myDeclList.typeCheck();
     }
     
     public void unparse(PrintWriter p, int indent) {
@@ -185,6 +185,12 @@ class DeclListNode extends ASTnode {
         } catch (NoSuchElementException ex) {
             System.err.println("unexpected NoSuchElementException in DeclListNode.print");
             System.exit(-1);
+        }
+    }
+
+    public void typeCheck() {
+        for(DeclNode node : myDecls) {
+            node.typeCheck();
         }
     }
 
@@ -259,6 +265,10 @@ class FnBodyNode extends ASTnode {
         myStmtList.unparse(p, indent);
     }
 
+    public void typeCheck(Type fnReturnType) {
+        myStmtList.typeCheck(fnReturnType);
+    }
+
     // 2 kids
     private DeclListNode myDeclList;
     private StmtListNode myStmtList;
@@ -283,6 +293,12 @@ class StmtListNode extends ASTnode {
         Iterator<StmtNode> it = myStmts.iterator();
         while (it.hasNext()) {
             it.next().unparse(p, indent);
+        }
+    }
+
+    public void typeCheck(Type fnReturnType) {
+        for(StmtNode stmt: myStmts) {
+            stmt.typeCheck(fnReturnType);
         }
     }
 
@@ -316,6 +332,25 @@ class ExpListNode extends ASTnode {
         } 
     }
 
+    public boolean typeCheck(List<Type> parameterTypes) {
+        boolean parametersGood = true;
+        for(int i = 0; i < myExps.size(); ++i) {
+            Type expType = myExps.get(i).typeCheck();
+            if(expType.isErrorType()) {
+                continue;
+            }
+            if(!expType.equals(parameterTypes.get(i))) {
+                ErrMsg.fatal(myExps.get(i).lineNum(), myExps.get(i).charNum(), "Type of actual does not match type of formal");
+                parametersGood = false;
+            }
+        }
+        return parametersGood;
+    }
+
+    public int getNumExps() {
+        return myExps.size();
+    }
+
     // list of kids (ExpNodes)
     private List<ExpNode> myExps;
 }
@@ -329,6 +364,8 @@ abstract class DeclNode extends ASTnode {
      * Note: a formal decl needs to return a sym
      */
     abstract public SemSym nameAnalysis(SymTable symTab);
+
+    public void typeCheck() {}
 }
 
 class VarDeclNode extends DeclNode {
@@ -511,6 +548,10 @@ class FnDeclNode extends DeclNode {
         p.println(") {");
         myBody.unparse(p, indent+4);
         p.println("}\n");
+    }
+
+    public void typeCheck() {
+        myBody.typeCheck(myType.type());
     }
 
     // 4 kids
@@ -735,6 +776,8 @@ class StructNode extends TypeNode {
 
 abstract class StmtNode extends ASTnode {
     abstract public void nameAnalysis(SymTable symTab);
+
+    abstract public void typeCheck(Type fnReturnType);
 }
 
 class AssignStmtNode extends StmtNode {
@@ -754,6 +797,10 @@ class AssignStmtNode extends StmtNode {
         doIndent(p, indent);
         myAssign.unparse(p, -1); // no parentheses
         p.println(";");
+    }
+
+    public void typeCheck(Type fnReturnType) {
+        myAssign.typeCheck();
     }
 
     // 1 kid
@@ -779,6 +826,13 @@ class PostIncStmtNode extends StmtNode {
         p.println("++;");
     }
 
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isIntType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Arithmetic operator applied to non-numeric operand");
+        }
+    }
+
     // 1 kid
     private ExpNode myExp;
 }
@@ -800,6 +854,13 @@ class PostDecStmtNode extends StmtNode {
         doIndent(p, indent);
         myExp.unparse(p, 0);
         p.println("--;");
+    }
+
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isIntType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Arithmetic operator applied to non-numeric operand");
+        }
     }
 
     // 1 kid
@@ -826,6 +887,17 @@ class ReadStmtNode extends StmtNode {
         p.println(";");
     }
 
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(type.isFnType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to read a function");
+        } else if(type.isStructDefType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to read struct name");
+        } else if(type.isStructType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to read a struct variable");
+        }
+    }
+
     // 1 kid (actually can only be an IdNode or an ArrayExpNode)
     private ExpNode myExp;
 }
@@ -848,6 +920,19 @@ class WriteStmtNode extends StmtNode {
         p.print("cout << ");
         myExp.unparse(p, 0);
         p.println(";");
+    }
+
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(type.isFnType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to write a function");
+        } else if(type.isStructDefType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to write struct name");
+        } else if(type.isStructType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to write a struct variable");
+        } else if(type.isVoidType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to write void");
+        }
     }
 
     // 1 kid
@@ -892,6 +977,14 @@ class IfStmtNode extends StmtNode {
         myStmtList.unparse(p, indent+4);
         doIndent(p, indent);
         p.println("}");
+    }
+
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isBoolType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Non-bool expression used as an if condition");
+        }
+        myStmtList.typeCheck(fnReturnType);
     }
 
     // e kids
@@ -963,6 +1056,15 @@ class IfElseStmtNode extends StmtNode {
         p.println("}");        
     }
 
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isBoolType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Non-bool expression used as an if condition");
+        }
+        myThenStmtList.typeCheck(fnReturnType);
+        myElseStmtList.typeCheck(fnReturnType);
+    }
+
     // 5 kids
     private ExpNode myExp;
     private DeclListNode myThenDeclList;
@@ -1011,6 +1113,14 @@ class WhileStmtNode extends StmtNode {
         p.println("}");
     }
 
+    public void typeCheck(Type fnReturnType) {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isBoolType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Non-bool expression used as a while condition");
+        }
+        myStmtList.typeCheck(fnReturnType);
+    }
+
     // 3 kids
     private ExpNode myExp;
     private DeclListNode myDeclList;
@@ -1034,6 +1144,10 @@ class CallStmtNode extends StmtNode {
         doIndent(p, indent);
         myCall.unparse(p, indent);
         p.println(";");
+    }
+
+    public void typeCheck(Type fnReturnType) {
+        myCall.typeCheck();
     }
 
     // 1 kid
@@ -1066,6 +1180,28 @@ class ReturnStmtNode extends StmtNode {
         p.println(";");
     }
 
+    public void typeCheck(Type fnReturnType) {
+
+        // function is supposed to return something, but has no return statement expression
+        if (myExp == null && !fnReturnType.isVoidType()) {
+            ErrMsg.fatal(0, 0, "Missing return value");
+            return;
+        }
+
+        Type type = myExp.typeCheck();
+
+        // function is supposed to return void, but does not
+        if (type.isVoidType() && !fnReturnType.isVoidType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Return with a value in a void function");
+            return;
+        }
+        // function definition return type, and return statement type do not match
+        else if (!type.equals(fnReturnType)) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Bad return value");
+            return;
+        }
+    }
+
     // 1 kid
     private ExpNode myExp; // possibly null
 }
@@ -1081,6 +1217,10 @@ abstract class ExpNode extends ASTnode {
     public void nameAnalysis(SymTable symTab) { }
 
     public abstract Type typeCheck();
+
+    public abstract int lineNum();
+
+    public abstract int charNum();
 }
 
 class IntLitNode extends ExpNode {
@@ -1097,6 +1237,20 @@ class IntLitNode extends ExpNode {
     public Type typeCheck() {
         return new IntType();
     }
+
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myLineNum;
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myCharNum;
+    } 
 
     private int myLineNum;
     private int myCharNum;
@@ -1118,6 +1272,20 @@ class StringLitNode extends ExpNode {
         return new StringType();
     }
 
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myLineNum;
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myCharNum;
+    } 
+
     private int myLineNum;
     private int myCharNum;
     private String myStrVal;
@@ -1137,6 +1305,20 @@ class TrueNode extends ExpNode {
         return new BoolType();
     }
 
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myLineNum;
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myCharNum;
+    } 
+
     private int myLineNum;
     private int myCharNum;
 }
@@ -1154,6 +1336,20 @@ class FalseNode extends ExpNode {
     public Type typeCheck() {
         return new BoolType();
     }
+
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myLineNum;
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myCharNum;
+    } 
 
     private int myLineNum;
     private int myCharNum;
@@ -1359,7 +1555,7 @@ class DotAccessExpNode extends ExpNode {
     }    
 
     public Type typeCheck() {
-        return mySym.getType();
+        return myId.typeCheck();
     }
     
     public void unparse(PrintWriter p, int indent) {
@@ -1399,9 +1595,43 @@ class AssignNode extends ExpNode {
         if (indent != -1)  p.print(")");
     }
 
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myLhs.lineNum();
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myLhs.charNum();
+    } 
+
     public Type typeCheck() {
-        // TODO: Implement checks.
-        return myLhs.typeCheck();
+        Type lhsType = myLhs.typeCheck();
+        Type rhsType = myExp.typeCheck();
+        if(lhsType.isErrorType() || rhsType.isErrorType()) {
+            return new ErrorType();
+        }
+        if(!lhsType.equals(rhsType)) {
+            ErrMsg.fatal(lineNum(), charNum(), "Type mismatch");
+            return new ErrorType();
+        }
+        if(lhsType.isFnType()) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function assignment");
+            return new ErrorType();
+        }
+        if(lhsType.isStructDefType()) {
+            ErrMsg.fatal(lineNum(), charNum(), "Struct name assignment");
+            return new ErrorType();
+        }
+        if(lhsType.isStructType()) {
+            ErrMsg.fatal(lineNum(), charNum(), "Struct variable assignment");
+            return new ErrorType();
+        }
+        return lhsType;
     }
 
     // 2 kids
@@ -1442,13 +1672,41 @@ class CallExpNode extends ExpNode {
 
     public Type typeCheck() {
         if(!(myId.sym() instanceof FnSym)) {
-            //TODO: Print Error
+            ErrMsg.fatal(lineNum(), charNum(), "Attempt to call a non-function");
             return new ErrorType();
         }
         FnSym sym = (FnSym) myId.sym();
-        //TODO: Type-check parameters
+        if((myExpList == null || myExpList.getNumExps() == 0) && sym.getNumParams() != 0) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
+            return new ErrorType();
+        }
+        if((myExpList != null && myExpList.getNumExps() > 0)  && sym.getNumParams() == 0) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
+            return new ErrorType();
+        }
+        if(sym.getNumParams() != myExpList.getNumExps()) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
+            return new ErrorType();
+        }
+        if(!myExpList.typeCheck(sym.getParamTypes())) {
+            return new ErrorType();
+        }
         return sym.getReturnType();
     }
+
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myId.lineNum();
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myId.charNum();
+    } 
 
     // 2 kids
     private IdNode myId;
@@ -1467,6 +1725,20 @@ abstract class UnaryExpNode extends ExpNode {
     public void nameAnalysis(SymTable symTab) {
         myExp.nameAnalysis(symTab);
     }
+
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myExp.lineNum();
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myExp.charNum();
+    } 
     
     // one child
     protected ExpNode myExp;
@@ -1487,6 +1759,20 @@ abstract class BinaryExpNode extends ExpNode {
         myExp1.nameAnalysis(symTab);
         myExp2.nameAnalysis(symTab);
     }
+
+    /**
+     * Return the line number for this ID.
+     */
+    public int lineNum() {
+        return myExp1.lineNum();
+    }
+    
+    /**
+     * Return the char number for this ID.
+     */
+    public int charNum() {
+        return myExp1.charNum();
+    } 
     
     // two kids
     protected ExpNode myExp1;
@@ -1505,11 +1791,11 @@ abstract class ArithmeticBinaryExpNode extends BinaryExpNode {
             return new ErrorType();
         }
         if (!exp1Type.isIntType()) {
-            //TODO: Print error
+            ErrMsg.fatal(myExp1.lineNum(), myExp1.charNum(), "Arithmetic operator applied to non-numeric operand");
             return new ErrorType();
         }
         if(!exp2Type.isIntType()) {
-            //TODO: Print error
+            ErrMsg.fatal(myExp2.lineNum(), myExp2.charNum(), "Arithmetic operator applied to non-numeric operand");
             return new ErrorType();
         }
         return new IntType();
@@ -1528,11 +1814,11 @@ abstract class BooleanBinaryExpNode extends BinaryExpNode {
             return new ErrorType();
         }
         if (!exp1Type.isBoolType()) {
-            //TODO: Print error
+            ErrMsg.fatal(myExp1.lineNum(), myExp1.charNum(), "Logical operator applied to non-bool operand");
             return new ErrorType();
         }
         if(!exp2Type.isBoolType()) {
-            //TODO: Print error
+            ErrMsg.fatal(myExp2.lineNum(), myExp2.charNum(), "Logical operator applied to non-bool operand");
             return new ErrorType();
         }
         return new BoolType();
@@ -1551,11 +1837,11 @@ abstract class ComparisonBinaryExpNode extends BinaryExpNode {
             return new ErrorType();
         }
         if (!exp1Type.isIntType()) {
-            //TODO: Print error
+            ErrMsg.fatal(myExp1.lineNum(), myExp1.charNum(), "Relational operator applied to non-numeric operand");
             return new ErrorType();
         }
         if(!exp2Type.isIntType()) {
-            //TODO: Print error
+            ErrMsg.fatal(myExp2.lineNum(), myExp2.charNum(), "Relational operator applied to non-numeric operand");
             return new ErrorType();
         }
         return new BoolType();
@@ -1575,23 +1861,27 @@ abstract class EqualityComparisonExpNode extends BinaryExpNode {
         }
 
         if(!exp1Type.equals(exp2Type)) {
-            //TODO: Print error
+            ErrMsg.fatal(lineNum(), charNum(), "Type mismatch");
             return new ErrorType();
         }
 
         if(exp1Type.isFnType()) {
-            //TODO: Print error
+            ErrMsg.fatal(lineNum(), charNum(), "Equality operator applied to functions");
             return new ErrorType();
         }
 
         if(exp1Type.isVoidType()) {
-            //TODO: Print error
+            ErrMsg.fatal(lineNum(), charNum(), "Equality operator applied to void functions");
             return new ErrorType();
         }
 
         if(exp1Type.isStructDefType()) {
-            //TODO: Print error
+            ErrMsg.fatal(lineNum(), charNum(), "Equality operator applied to struct names");
             return new ErrorType();
+        }
+
+        if(exp1Type.isStructType()) {
+            ErrMsg.fatal(lineNum(), charNum(), "Equality operator applied to struct variables");
         }
 
 
@@ -1623,7 +1913,7 @@ class UnaryMinusNode extends UnaryExpNode {
             return new IntType();
         }
 
-        //TODO: Print error
+        ErrMsg.fatal(lineNum(), charNum(), "Arithmetic operator applied to non-numeric operand");
         return new ErrorType();
     }
 }
@@ -1648,7 +1938,7 @@ class NotNode extends UnaryExpNode {
             return new BoolType();
         }
 
-        //TODO: Print error
+        ErrMsg.fatal(lineNum(), charNum(), "Logical operator applied to non-bool operand");
         return new ErrorType();
     }
 }
