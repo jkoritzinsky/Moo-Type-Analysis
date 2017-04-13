@@ -136,7 +136,7 @@ class ProgramNode extends ASTnode {
     }
     
     public void typeCheck(){
-    	// TODO: You'll have to change this
+    	myDeclList.typeCheck();
     }
     
     public void unparse(PrintWriter p, int indent) {
@@ -185,6 +185,12 @@ class DeclListNode extends ASTnode {
         } catch (NoSuchElementException ex) {
             System.err.println("unexpected NoSuchElementException in DeclListNode.print");
             System.exit(-1);
+        }
+    }
+
+    public void typeCheck() {
+        for(DeclNode node : myDecls) {
+            node.typeCheck();
         }
     }
 
@@ -259,6 +265,10 @@ class FnBodyNode extends ASTnode {
         myStmtList.unparse(p, indent);
     }
 
+    public void typeCheck() {
+        myStmtList.typeCheck();
+    }
+
     // 2 kids
     private DeclListNode myDeclList;
     private StmtListNode myStmtList;
@@ -283,6 +293,12 @@ class StmtListNode extends ASTnode {
         Iterator<StmtNode> it = myStmts.iterator();
         while (it.hasNext()) {
             it.next().unparse(p, indent);
+        }
+    }
+
+    public void typeCheck() {
+        for(StmtNode stmt: myStmts) {
+            stmt.typeCheck();
         }
     }
 
@@ -316,6 +332,12 @@ class ExpListNode extends ASTnode {
         } 
     }
 
+    public void typeCheck() {
+        for(ExpNode node : myExps) {
+            node.typeCheck();
+        }
+    }
+
     // list of kids (ExpNodes)
     private List<ExpNode> myExps;
 }
@@ -329,6 +351,8 @@ abstract class DeclNode extends ASTnode {
      * Note: a formal decl needs to return a sym
      */
     abstract public SemSym nameAnalysis(SymTable symTab);
+
+    public void typeCheck() {}
 }
 
 class VarDeclNode extends DeclNode {
@@ -511,6 +535,10 @@ class FnDeclNode extends DeclNode {
         p.println(") {");
         myBody.unparse(p, indent+4);
         p.println("}\n");
+    }
+
+    public void typeCheck() {
+        myBody.typeCheck();
     }
 
     // 4 kids
@@ -735,6 +763,8 @@ class StructNode extends TypeNode {
 
 abstract class StmtNode extends ASTnode {
     abstract public void nameAnalysis(SymTable symTab);
+
+    abstract public void typeCheck();
 }
 
 class AssignStmtNode extends StmtNode {
@@ -754,6 +784,10 @@ class AssignStmtNode extends StmtNode {
         doIndent(p, indent);
         myAssign.unparse(p, -1); // no parentheses
         p.println(";");
+    }
+
+    public void typeCheck() {
+        myAssign.typeCheck();
     }
 
     // 1 kid
@@ -779,6 +813,13 @@ class PostIncStmtNode extends StmtNode {
         p.println("++;");
     }
 
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isIntType()) {
+            // TODO: Report error.
+        }
+    }
+
     // 1 kid
     private ExpNode myExp;
 }
@@ -800,6 +841,13 @@ class PostDecStmtNode extends StmtNode {
         doIndent(p, indent);
         myExp.unparse(p, 0);
         p.println("--;");
+    }
+
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isIntType()) {
+            // TODO: Report error.
+        }
     }
 
     // 1 kid
@@ -826,6 +874,19 @@ class ReadStmtNode extends StmtNode {
         p.println(";");
     }
 
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(type.isFnType()) {
+            // TODO: Print error
+        } else if(type.isStructDefType()) {
+            // TODO: Print error
+        } else if(type.isStructType()) {
+            // TODO: Print error
+        } else if(type.isVoidType()) {
+            // TODO: Print error (?)
+        }
+    }
+
     // 1 kid (actually can only be an IdNode or an ArrayExpNode)
     private ExpNode myExp;
 }
@@ -848,6 +909,19 @@ class WriteStmtNode extends StmtNode {
         p.print("cout << ");
         myExp.unparse(p, 0);
         p.println(";");
+    }
+
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(type.isFnType()) {
+            // TODO: Print error
+        } else if(type.isStructDefType()) {
+            // TODO: Print error
+        } else if(type.isStructType()) {
+            // TODO: Print error
+        } else if(type.isVoidType()) {
+            // TODO: Print error
+        }
     }
 
     // 1 kid
@@ -892,6 +966,14 @@ class IfStmtNode extends StmtNode {
         myStmtList.unparse(p, indent+4);
         doIndent(p, indent);
         p.println("}");
+    }
+
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isBoolType()) {
+            // TODO: Print error
+        }
+        myStmtList.typeCheck();
     }
 
     // e kids
@@ -963,6 +1045,15 @@ class IfElseStmtNode extends StmtNode {
         p.println("}");        
     }
 
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isBoolType()) {
+            // TODO: Print error
+        }
+        myThenStmtList.typeCheck();
+        myElseStmtList.typeCheck();
+    }
+
     // 5 kids
     private ExpNode myExp;
     private DeclListNode myThenDeclList;
@@ -1011,6 +1102,14 @@ class WhileStmtNode extends StmtNode {
         p.println("}");
     }
 
+    public void typeCheck() {
+        Type type = myExp.typeCheck();
+        if(!type.isErrorType() && !type.isBoolType()) {
+            // TODO: Print error
+        }
+        myStmtList.typeCheck();
+    }
+
     // 3 kids
     private ExpNode myExp;
     private DeclListNode myDeclList;
@@ -1034,6 +1133,10 @@ class CallStmtNode extends StmtNode {
         doIndent(p, indent);
         myCall.unparse(p, indent);
         p.println(";");
+    }
+
+    public void typeCheck() {
+        myCall.typeCheck();
     }
 
     // 1 kid
@@ -1064,6 +1167,11 @@ class ReturnStmtNode extends StmtNode {
             myExp.unparse(p, 0);
         }
         p.println(";");
+    }
+
+    public void typeCheck() {
+        // TODO: Decide how to type check return values
+        Type type = myExp.typeCheck();
     }
 
     // 1 kid
