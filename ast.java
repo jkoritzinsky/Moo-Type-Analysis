@@ -265,8 +265,8 @@ class FnBodyNode extends ASTnode {
         myStmtList.unparse(p, indent);
     }
 
-    public void typeCheck() {
-        myStmtList.typeCheck();
+    public void typeCheck(TypeNode fnReturnType) {
+        myStmtList.typeCheck(fnReturnType);
     }
 
     // 2 kids
@@ -296,9 +296,9 @@ class StmtListNode extends ASTnode {
         }
     }
 
-    public void typeCheck() {
+    public void typeCheck(TypeNode fnReturnType) {
         for(StmtNode stmt: myStmts) {
-            stmt.typeCheck();
+            stmt.typeCheck(fnReturnType);
         }
     }
 
@@ -551,7 +551,7 @@ class FnDeclNode extends DeclNode {
     }
 
     public void typeCheck() {
-        myBody.typeCheck();
+        myBody.typeCheck(myType);
     }
 
     // 4 kids
@@ -777,7 +777,7 @@ class StructNode extends TypeNode {
 abstract class StmtNode extends ASTnode {
     abstract public void nameAnalysis(SymTable symTab);
 
-    abstract public void typeCheck();
+    abstract public void typeCheck(TypeNode fnReturnType);
 }
 
 class AssignStmtNode extends StmtNode {
@@ -1180,9 +1180,24 @@ class ReturnStmtNode extends StmtNode {
         p.println(";");
     }
 
-    public void typeCheck() {
-        // TODO: Decide how to type check return values
+    public void typeCheck(TypeNode fnReturnType) {
         Type type = myExp.typeCheck();
+
+        // function is supposed to return something, but has no return statement expression
+        if (myExp == null && !fnReturnType.isVoidType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Missing return value");
+            return new ErrorType();
+        }
+        // function is supposed to return void, but does not
+        else if (type.isVoidType() && !fnReturnType.isVoidType()) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Return with a value in a void function");
+            return new ErrorType();
+        }
+        // function definition return type, and return statement type do not match
+        else if (!type.equals(fnReturnType)) {
+            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Bad return value");
+            return new ErrorType();
+        }
     }
 
     // 1 kid
