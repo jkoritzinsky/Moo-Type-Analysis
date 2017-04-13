@@ -265,7 +265,7 @@ class FnBodyNode extends ASTnode {
         myStmtList.unparse(p, indent);
     }
 
-    public void typeCheck(TypeNode fnReturnType) {
+    public void typeCheck(Type fnReturnType) {
         myStmtList.typeCheck(fnReturnType);
     }
 
@@ -296,7 +296,7 @@ class StmtListNode extends ASTnode {
         }
     }
 
-    public void typeCheck(TypeNode fnReturnType) {
+    public void typeCheck(Type fnReturnType) {
         for(StmtNode stmt: myStmts) {
             stmt.typeCheck(fnReturnType);
         }
@@ -551,7 +551,7 @@ class FnDeclNode extends DeclNode {
     }
 
     public void typeCheck() {
-        myBody.typeCheck(myType);
+        myBody.typeCheck(myType.type());
     }
 
     // 4 kids
@@ -777,7 +777,7 @@ class StructNode extends TypeNode {
 abstract class StmtNode extends ASTnode {
     abstract public void nameAnalysis(SymTable symTab);
 
-    abstract public void typeCheck(TypeNode fnReturnType);
+    abstract public void typeCheck(Type fnReturnType);
 }
 
 class AssignStmtNode extends StmtNode {
@@ -799,7 +799,7 @@ class AssignStmtNode extends StmtNode {
         p.println(";");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         myAssign.typeCheck();
     }
 
@@ -826,7 +826,7 @@ class PostIncStmtNode extends StmtNode {
         p.println("++;");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(!type.isErrorType() && !type.isIntType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Arithmetic operator applied to non-numeric operand");
@@ -856,7 +856,7 @@ class PostDecStmtNode extends StmtNode {
         p.println("--;");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(!type.isErrorType() && !type.isIntType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Arithmetic operator applied to non-numeric operand");
@@ -887,7 +887,7 @@ class ReadStmtNode extends StmtNode {
         p.println(";");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(type.isFnType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to read a function");
@@ -922,7 +922,7 @@ class WriteStmtNode extends StmtNode {
         p.println(";");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(type.isFnType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Attempt to write a function");
@@ -979,12 +979,12 @@ class IfStmtNode extends StmtNode {
         p.println("}");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(!type.isErrorType() && !type.isBoolType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Non-bool expression used as an if condition");
         }
-        myStmtList.typeCheck();
+        myStmtList.typeCheck(fnReturnType);
     }
 
     // e kids
@@ -1056,13 +1056,13 @@ class IfElseStmtNode extends StmtNode {
         p.println("}");        
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(!type.isErrorType() && !type.isBoolType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Non-bool expression used as an if condition");
         }
-        myThenStmtList.typeCheck();
-        myElseStmtList.typeCheck();
+        myThenStmtList.typeCheck(fnReturnType);
+        myElseStmtList.typeCheck(fnReturnType);
     }
 
     // 5 kids
@@ -1113,12 +1113,12 @@ class WhileStmtNode extends StmtNode {
         p.println("}");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         Type type = myExp.typeCheck();
         if(!type.isErrorType() && !type.isBoolType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Non-bool expression used as a while condition");
         }
-        myStmtList.typeCheck();
+        myStmtList.typeCheck(fnReturnType);
     }
 
     // 3 kids
@@ -1146,7 +1146,7 @@ class CallStmtNode extends StmtNode {
         p.println(";");
     }
 
-    public void typeCheck() {
+    public void typeCheck(Type fnReturnType) {
         myCall.typeCheck();
     }
 
@@ -1180,23 +1180,25 @@ class ReturnStmtNode extends StmtNode {
         p.println(";");
     }
 
-    public void typeCheck(TypeNode fnReturnType) {
-        Type type = myExp.typeCheck();
+    public void typeCheck(Type fnReturnType) {
 
         // function is supposed to return something, but has no return statement expression
         if (myExp == null && !fnReturnType.isVoidType()) {
-            ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Missing return value");
-            return new ErrorType();
+            ErrMsg.fatal(0, 0, "Missing return value");
+            return;
         }
+
+        Type type = myExp.typeCheck();
+
         // function is supposed to return void, but does not
-        else if (type.isVoidType() && !fnReturnType.isVoidType()) {
+        if (type.isVoidType() && !fnReturnType.isVoidType()) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Return with a value in a void function");
-            return new ErrorType();
+            return;
         }
         // function definition return type, and return statement type do not match
         else if (!type.equals(fnReturnType)) {
             ErrMsg.fatal(myExp.lineNum(), myExp.charNum(), "Bad return value");
-            return new ErrorType();
+            return;
         }
     }
 
@@ -1553,7 +1555,7 @@ class DotAccessExpNode extends ExpNode {
     }    
 
     public Type typeCheck() {
-        return mySym.getType();
+        return myId.typeCheck();
     }
     
     public void unparse(PrintWriter p, int indent) {
@@ -1674,7 +1676,11 @@ class CallExpNode extends ExpNode {
             return new ErrorType();
         }
         FnSym sym = (FnSym) myId.sym();
-        if(myExpList == null ^ sym.getNumParams() == 0) {
+        if((myExpList == null || myExpList.getNumExps() == 0) && sym.getNumParams() != 0) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
+            return new ErrorType();
+        }
+        if((myExpList != null && myExpList.getNumExps() > 0)  && sym.getNumParams() == 0) {
             ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
             return new ErrorType();
         }
