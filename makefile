@@ -22,7 +22,7 @@ Yylex.class: moo.jlex.java sym.class ErrMsg.class
 	$(JC) moo.jlex.java
 
 ASTnode.class: ast.java Type.java
-	$(JC) -g ast.java
+	$(JC) -g ast.java Type.java
 
 moo.jlex.java: moo.jlex sym.class
 	java JLex.Main moo.jlex
@@ -36,7 +36,7 @@ sym.java: moo.cup
 ErrMsg.class: ErrMsg.java
 	$(JC) ErrMsg.java
 
-Sym.class: Sym.java Type.java ast.java
+SemSym.class: SemSym.java Type.java ast.java
 	$(JC) -g Sym.java
 	
 SymTable.class: SymTable.java Sym.java DuplicateSymException.java EmptySymTableException.java
