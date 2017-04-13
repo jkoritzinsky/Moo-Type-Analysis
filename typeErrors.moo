@@ -15,6 +15,8 @@ int returnType() {
     return 1;
 }
 
+bool test() {}
+
 
 struct Test {
     int i;
@@ -74,6 +76,7 @@ void main() {
     f = f;
     Test = Test;
     t = t;
+    b = (test() == f());
     if(true == ((b + 1 >= 3) || !false)) {}
     while(true == ((b + 1 >= 3) || !false)) {}
     cout << (true == ((b + 1 >= 3) || !false));
