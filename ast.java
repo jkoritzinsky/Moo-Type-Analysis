@@ -332,10 +332,23 @@ class ExpListNode extends ASTnode {
         } 
     }
 
-    public void typeCheck() {
-        for(ExpNode node : myExps) {
-            node.typeCheck();
+    public boolean typeCheck(List<Type> parameterTypes) {
+        boolean parametersGood = true;
+        for(int i = 0; i < myExps.size(); ++i) {
+            Type expType = myExps.get(i).typeCheck();
+            if(expType.isErrorType()) {
+                continue;
+            }
+            if(!expType.equals(parameterTypes.get(i))) {
+                ErrMsg.fatal(myExps.get(i).lineNum(), myExps.get(i).charNum(), "Type of actual does not match type of formal");
+                parametersGood = false;
+            }
         }
+        return parametersGood;
+    }
+
+    public int getNumExps() {
+        return myExps.size();
     }
 
     // list of kids (ExpNodes)
@@ -1642,11 +1655,21 @@ class CallExpNode extends ExpNode {
 
     public Type typeCheck() {
         if(!(myId.sym() instanceof FnSym)) {
-            //TODO: Print Error
+            ErrMsg.fatal(lineNum(), charNum(), "Attempt to call a non-function");
             return new ErrorType();
         }
         FnSym sym = (FnSym) myId.sym();
-        //TODO: Type-check parameters
+        if(myExpList == null ^ sym.getNumParams() == 0) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
+            return new ErrorType();
+        }
+        if(sym.getNumParams() != myExpList.getNumExps()) {
+            ErrMsg.fatal(lineNum(), charNum(), "Function call with wrong number of args");
+            return new ErrorType();
+        }
+        if(!myExpList.typeCheck(sym.getParamTypes())) {
+            return new ErrorType();
+        }
         return sym.getReturnType();
     }
 
